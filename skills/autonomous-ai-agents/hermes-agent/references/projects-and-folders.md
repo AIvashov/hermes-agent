@@ -68,8 +68,9 @@ accept the display name; get the slug from `hermes project list`.
   `path`; unlike the CLI it also matches display names, and archived projects. In a live
   desktop/TUI chat, `create` and `switch` move *that chat's* workspace to the project's
   primary folder and the sidebar follows — the intended way to move a chat between projects,
-  not `cd`. That move leaves the active-project pointer (the shared sidebar selection)
-  alone; a project with no folders cannot move the chat, so it sets the pointer instead. A
+  not `cd`. The tool itself leaves the active-project pointer (the shared sidebar selection)
+  alone, though the desktop sidebar following the chat you are viewing can select the new
+  project; a project with no folders cannot move the chat, so it sets the pointer instead. A
   primary folder that does not exist on disk is skipped silently: the call succeeds but the
   chat stays put. `create` with a `path` that is already another project's primary reuses
   that project instead of failing.
@@ -83,7 +84,8 @@ accept the display name; get the slug from `hermes project list`.
   fail: the task is created unlinked.
   `hermes project bind-board` does not set that board binding. It records the board on the
   project and, when the board exists and the project has a primary folder, sets the board's
-  default workdir to it (used only by tasks created with `--workspace worktree` or `dir:`);
+  default workdir to it (from the CLI only a bare `--workspace worktree` task uses it; the
+  dashboard's new-task form pre-selects a worktree or dir task there);
   a binding made in the dashboard is left as it was. Unbinding (`bind-board <project>` with
   no board) clears only the project's record; the board keeps its default workdir and any
   dashboard binding.
@@ -119,8 +121,9 @@ hermes kanban create "Wire the webhook" --project payments
 - **Kanban task has no `project_id` / branch** — `--project` did not match an id or slug in
   this profile (no error is raised), or the board was only bound with
   `hermes project bind-board`. Pass a valid `--project <slug>`, or bind the board to the
-  project in the kanban dashboard. A `project_id` with no branch means the project has no
-  primary folder (`hermes project add-folder <project> <path> --primary`).
+  project in the kanban dashboard. A `project_id` with no branch on a task not created with
+  `--workspace dir:` means the project has no primary folder
+  (`hermes project add-folder <project> <path> --primary`).
 - **"switched project but this chat didn't move"** — `hermes project use` only moves the
   pointer. Switch from inside the chat (the `desktop_project` tool), or start the chat in the
   project's folder; check that the primary folder exists.
