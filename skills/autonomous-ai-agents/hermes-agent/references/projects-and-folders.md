@@ -121,8 +121,8 @@ hermes kanban create "Wire the webhook" --project payments
 - **Kanban task has no `project_id` / branch** — `--project` did not match an id or slug in
   this profile (no error is raised), or the board was only bound with
   `hermes project bind-board`. Pass a valid `--project <slug>`, or bind the board to the
-  project in the kanban dashboard. A `project_id` with no branch on a task not created with
-  `--workspace dir:` means the project has no primary folder
+  project in the kanban dashboard. A `project_id` with no branch on a non-`dir` task means the
+  project has no primary folder
   (`hermes project add-folder <project> <path> --primary`).
 - **"switched project but this chat didn't move"** — `hermes project use` only moves the
   pointer. Switch from inside the chat (the `desktop_project` tool), or start the chat in the
