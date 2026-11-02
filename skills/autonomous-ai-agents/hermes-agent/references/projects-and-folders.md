@@ -2,8 +2,8 @@
 
 A **Project** is a named workspace that can span several folders — a repo, a monorepo, a
 scratch directory, a sibling repo you always open together. Projects are the named
-workspaces the desktop sidebar groups chats by, and a kanban task linked to a project gets a
-worktree and branch under the project's primary repo.
+workspaces the desktop sidebar groups chats by, and a kanban task linked to a project with a
+primary folder defaults to a worktree and branch under that repo.
 
 Projects are **not** git concepts and not config keys: they live in their own SQLite store,
 one per profile (`$HERMES_HOME/projects.db`; `~/.hermes` by default, `%LOCALAPPDATA%\hermes`
@@ -83,7 +83,10 @@ accept the display name; get the slug from `hermes project list`.
   fail: the task is created unlinked.
   `hermes project bind-board` does not set that board binding. It records the board on the
   project and, when the board exists and the project has a primary folder, sets the board's
-  default workdir to it; a binding made in the dashboard is left as it was.
+  default workdir to it (used only by tasks created with `--workspace worktree` or `dir:`);
+  a binding made in the dashboard is left as it was. Unbinding (`bind-board <project>` with
+  no board) clears only the project's record; the board keeps its default workdir and any
+  dashboard binding.
 
 ## Common tasks
 
@@ -116,7 +119,8 @@ hermes kanban create "Wire the webhook" --project payments
 - **Kanban task has no `project_id` / branch** — `--project` did not match an id or slug in
   this profile (no error is raised), or the board was only bound with
   `hermes project bind-board`. Pass a valid `--project <slug>`, or bind the board to the
-  project in the kanban dashboard.
+  project in the kanban dashboard. A `project_id` with no branch means the project has no
+  primary folder (`hermes project add-folder <project> <path> --primary`).
 - **"switched project but this chat didn't move"** — `hermes project use` only moves the
   pointer. Switch from inside the chat (the `desktop_project` tool), or start the chat in the
   project's folder; check that the primary folder exists.
