@@ -6,8 +6,9 @@ workspaces the desktop sidebar groups chats by, and a kanban task linked to a pr
 worktree and branch under the project's primary repo.
 
 Projects are **not** git concepts and not config keys: they live in their own SQLite store,
-one per profile (`$HERMES_HOME/projects.db`), so two profiles keep separate project lists.
-The store is created on first use; nothing to enable.
+one per profile (`$HERMES_HOME/projects.db`; `~/.hermes` by default, `%LOCALAPPDATA%\hermes`
+on Windows), created on first use. `hermes -p <profile> project list` shows another
+profile's projects.
 
 ## Command surface
 
@@ -24,11 +25,10 @@ The store is created on first use; nothing to enable.
 | `set-primary <project> <path>` | Primary folder; the path must already be in the project. |
 | `use [<project>]` | Set the active project; with no argument, clear it. |
 | `archive <project>` / `restore <project>` | Hide / unhide a project (reversible; nothing on disk moves). |
-| `bind-board <project> [<board>]` | Record a kanban board on the project; omit the board to unbind. It does not link the board's tasks to the project (see Kanban below). |
+| `bind-board <project> [<board>]` | Record a kanban board on the project; omit the board to unbind (see Kanban below). |
 
-`<project>` is an id (`p_1a2b3c4d`) or a slug, matched case-insensitively. The CLI does
-**not** accept the display name: `hermes project show "Hermes Agent"` fails with
-`no such project`; use the slug (`hermes-agent`) from `hermes project list`.
+`<project>` is an id (`p_1a2b3c4d`, exact) or a slug (any case). The CLI does **not**
+accept the display name; get the slug from `hermes project list`.
 
 ## Semantics worth knowing
 
@@ -37,22 +37,22 @@ The store is created on first use; nothing to enable.
   is already taken gets a suffix (`team-docs-2`, …), an explicit `--slug` included, so read
   the slug back from the `Created project <slug>` line.
 - **Folders** — stored as absolute paths; `~`, relative paths and trailing slashes are
-  normalized on every command, and paths are not checked for existence. The primary is the
-  first folder given, or `--primary`; it anchors kanban worktrees and the folder a desktop
-  chat moves to.
+  normalized on every command. Paths are not checked or created. The primary is the first
+  folder given, or `--primary`; it anchors kanban worktrees and the folder a desktop chat
+  moves to.
 - **One project per primary folder** — `create` refuses a primary path that is already the
-  primary of another (non-archived) project: `folder already belongs to project '<slug>'
-  …; switch to it instead of creating a duplicate`. Reuse that project; two projects owning
-  one path produce duplicate sidebar subtrees.
-- **Active project** — one per-profile pointer that `use` sets and clears. Unscoped callers
-  (CLI, scripts, messaging platforms) treat it as "the current project". A live desktop / TUI
-  chat is scoped to its own workspace instead (see `desktop_project` below).
+  primary of another (non-archived) project (`folder already belongs to project '<slug>'
+  …`). Two projects owning one path produce duplicate sidebar subtrees.
+- **Active project** — one per-profile pointer that `use` sets and clears: the `*` in
+  `hermes project list` and the highlighted project in the desktop sidebar. It is a marker,
+  not a scope: kanban tasks and chat workspaces do not follow it.
 - **Archived projects** are hidden from `list` (use `--all`) and stop claiming their folders
-  for path → project resolution; they still resolve by id or slug. `restore` brings them back.
+  for path → project resolution; they still resolve by id or slug.
 - **Path → project resolution** — a folder owns itself and everything under it, and the
   longest matching folder wins, so a nested project resolves to the innermost one.
 - **Deleting** — the CLI has no delete; `archive` is the reversible way to retire a project.
-  The desktop app's project menu deletes permanently.
+  The desktop app's project menu deletes the project record permanently (folders on disk and
+  chats are kept).
 - **Exit codes** — `0` ok; `1` no such project, or the path is not a folder of that project
   (`remove-folder`, `set-primary`); `2` invalid input (bad slug or board slug, empty name,
   duplicate primary folder, bad arguments).
@@ -61,25 +61,29 @@ The store is created on first use; nothing to enable.
 
 - **Desktop sidebar grouping.** A chat's workspace (its cwd) resolves to the owning project
   by the path rule above, and the TUI status line and desktop status bar name it. The
-  sidebar also shows automatic groups for git repos that are not projects; those do not
-  appear in `hermes project list`.
+  sidebar also shows automatic groups for repos and folders that are not projects (absent
+  from `hermes project list`); setting a color or icon on one turns it into a real project.
 - **The `desktop_project` tool** (toolset `project`, folded in by the desktop/TUI gateway;
   not in the default CLI or messaging toolsets). `action: create|switch|list` with `name` /
-  `path`; unlike the CLI it also matches display names. In a live desktop/TUI chat, `create`
-  and `switch` move *that chat's* workspace to the project's primary folder and the sidebar
-  follows — the intended way to move a chat between projects, not `cd`. That move leaves the
-  active-project pointer alone so other open chats are not redirected; a project with no
-  folders cannot move the chat, so it sets the pointer instead. `create` with a `path` that
-  is already another project's primary reuses that project instead of failing.
+  `path`; unlike the CLI it also matches display names, and archived projects. In a live
+  desktop/TUI chat, `create` and `switch` move *that chat's* workspace to the project's
+  primary folder and the sidebar follows — the intended way to move a chat between projects,
+  not `cd`. That move leaves the active-project pointer (the shared sidebar selection)
+  alone; a project with no folders cannot move the chat, so it sets the pointer instead. A
+  primary folder that does not exist on disk is skipped silently: the call succeeds but the
+  chat stays put. `create` with a `path` that is already another project's primary reuses
+  that project instead of failing.
 - **Kanban.** A task is linked to a project when it is created with
-  `hermes kanban create … --project <slug>`, or when its board is bound to the project in the
-  kanban dashboard (the board's Project selector); tasks on such a board inherit the project
-  unless created with `--workspace scratch`. A project-linked worktree task gets a worktree
-  at `<primary>/.worktrees/<task-id>` on branch `<project-slug>/<task-id>[-<title-slug>]`
-  instead of the generic `wt/<task-id>`.
-  `hermes project bind-board` is not that binding: it records the board on the project and,
-  when the board already exists, sets the board's default workdir to the project's primary
-  folder. Tasks on that board are not project-linked unless created with `--project`.
+  `hermes kanban create … --project <id-or-slug>`, or when its board is bound to the project
+  in the kanban dashboard (the board's Project selector); tasks on such a board inherit the
+  project unless created with `--workspace scratch`. A linked task whose project has a
+  primary folder defaults to a worktree at `<primary>/.worktrees/<task-id>` on branch
+  `<project-slug>/<task-id>[-<title-slug>]` instead of the generic `wt/<task-id>`; the
+  primary must be a git repo when the worker starts. An unknown `--project` value does not
+  fail: the task is created unlinked.
+  `hermes project bind-board` does not set that board binding. It records the board on the
+  project and, when the board exists and the project has a primary folder, sets the board's
+  default workdir to it; a binding made in the dashboard is left as it was.
 
 ## Common tasks
 
@@ -102,26 +106,24 @@ hermes project show payments
 hermes project archive payments        # hidden from list / path resolution
 hermes project restore payments
 
-# A project-linked kanban worktree task (deterministic branch)
-hermes kanban create "Wire the webhook" --workspace worktree --project payments
+# A project-linked kanban task (worktree + deterministic branch)
+hermes kanban create "Wire the webhook" --project payments
 ```
-
-`$HERMES_HOME` defaults to `~/.hermes`; each profile keeps its own `projects.db`
-(`hermes -p <profile> project list` lists that profile's projects).
 
 ## Troubleshooting
 
-- **`no such project: <Name>`** — the CLI takes an id or slug, not the display name; get the
-  slug from `hermes project list`.
+- **`no such project: <Name>`** — the CLI takes an id or slug, not the display name.
+- **Kanban task has no `project_id` / branch** — `--project` did not match an id or slug in
+  this profile (no error is raised), or the board was only bound with
+  `hermes project bind-board`. Pass a valid `--project <slug>`, or bind the board to the
+  project in the kanban dashboard.
 - **"switched project but this chat didn't move"** — `hermes project use` only moves the
-  profile pointer. A desktop/TUI chat follows its own workspace: switch from inside the chat
-  (the `desktop_project` tool), or start the chat in the project's folder.
+  pointer. Switch from inside the chat (the `desktop_project` tool), or start the chat in the
+  project's folder; check that the primary folder exists.
 - **`create` refused: folder already belongs to project X** — the folder is already X's
-  primary. Use X (`hermes project show X`, `rename` it if the name is wrong) rather than
-  adding the folder to a second project.
-- **Tasks on a bound board get no project branch** — `bind-board` does not link tasks; pass
-  `--project <slug>` to `hermes kanban create`, or bind the board to the project in the
-  kanban dashboard.
+  primary (possibly an automatic sidebar group that was given a color or icon). Use X
+  (`hermes project show X`, `rename` it if the name is wrong) rather than adding the folder
+  to a second project.
 - **A project's folders look "unprojected"** — the project is archived;
   `hermes project restore <project>`.
 - **Two profiles show different projects** — expected: `projects.db` is per profile.
@@ -132,5 +134,6 @@ hermes kanban create "Wire the webhook" --workspace worktree --project payments
 - `references/background-systems.md` — kanban overview.
 - `references/project-context-files.md` — a different feature: `AGENTS.md` / `.hermes.md` /
   `CLAUDE.md` instruction files that load into a session.
-- Docs: `/user-guide/features/kanban#managing-boards-from-the-dashboard` (board ↔ project
-  binding) and `/reference/cli-commands#hermes-project`.
+- https://hermes-agent.nousresearch.com/docs/user-guide/features/kanban#managing-boards-from-the-dashboard
+  (board ↔ project binding) and
+  https://hermes-agent.nousresearch.com/docs/reference/cli-commands#hermes-project
